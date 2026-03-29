@@ -4,17 +4,25 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+VENV_PATH="${PWD}/.venv"
+HASS_BIN="${VENV_PATH}/bin/hass"
+
+if [[ ! -x "${HASS_BIN}" ]]; then
+    echo "Virtualenv is missing. Run ./scripts/setup first."
+    exit 1
+fi
+
 # Create config dir if not present
 if [[ ! -d "${PWD}/config" ]]; then
     mkdir -p "${PWD}/config"
-    hass --config "${PWD}/config" --script ensure_config
+    "${HASS_BIN}" --config "${PWD}/config" --script ensure_config
 fi
 
 # Set the path to custom_components
-## This let's us have the structure we want <root>/custom_components/integration_blueprint
+## This lets us have the structure we want <root>/custom_components/hacs_ai_export
 ## while at the same time have Home Assistant configuration inside <root>/config
 ## without resulting to symlinks.
 export PYTHONPATH="${PYTHONPATH}:${PWD}/custom_components"
 
 # Start Home Assistant
-hass --config "${PWD}/config" --debug
+"${HASS_BIN}" --config "${PWD}/config" --debug

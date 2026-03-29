@@ -1,0 +1,65 @@
+{
+  "title": "HACS AI Export",
+  "config": {
+    "step": {
+      "user": {
+        "description": "Adds a service that exports Home Assistant context in AI-friendly format."
+      }
+    },
+    "abort": {
+      "already_configured": "Only a single HACS AI Export entry is allowed."
+    }
+  },
+  "services": {
+    "generate_context": {
+      "name": "Generate AI Context",
+      "description": "Export selected Home Assistant metadata and states for AI-assisted automation authoring.",
+      "fields": {
+        "sections": {
+          "name": "Sections",
+          "description": "Pick one or more sections to include in the export."
+        },
+        "entity_id": {
+          "name": "Entities",
+          "description": "Optional entity filter. Leave empty to include all entities matching other filters."
+        },
+        "device_ids": {
+          "name": "Devices",
+          "description": "Optional device filter."
+        },
+        "area_ids": {
+          "name": "Areas",
+          "description": "Optional area filter."
+        },
+        "label_ids": {
+          "name": "Labels",
+          "description": "Optional label filter for entities, devices, and areas."
+        },
+        "domains": {
+          "name": "Domains",
+          "description": "Optional domain filter, e.g. light, switch, climate."
+        },
+        "include_disabled_entities": {
+          "name": "Include Disabled Entities",
+          "description": "Include disabled registry entities in export output."
+        },
+        "create_notification": {
+          "name": "Create Notification",
+          "description": "Show a persistent notification after export generation."
+        },
+        "output_format": {
+          "name": "Output Format",
+          "description": "Choose YAML or JSON output."
+        },
+        "max_entities": {
+          "name": "Max Entities",
+          "description": "Safety cap for entity count."
+        },
+        "max_services": {
+          "name": "Max Services",
+          "description": "Safety cap for services/actions count."
+        }
+      }
+    }
+  }
+}

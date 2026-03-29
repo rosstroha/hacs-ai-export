@@ -1,0 +1,25 @@
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:2026.3.2
+    container_name: hacs-ai-export-homeassistant
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+    environment:
+      TZ: ${TZ:-America/Denver}
+    volumes:
+      - ./config:/config
+      - ./custom_components:/config/custom_components
+
+  pytest:
+    build:
+      context: .
+      dockerfile: Dockerfile.pytest
+    container_name: hacs-ai-export-pytest
+    working_dir: /workdir
+    environment:
+      PYTHONPATH: /workdir/custom_components
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ./:/workdir
+    command: ["pytest", "-q"]

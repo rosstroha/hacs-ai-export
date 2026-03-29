@@ -1,0 +1,102 @@
+generate_context:
+  name: Generate AI Context
+  description: Export selected Home Assistant metadata/state in an AI-friendly format.
+  fields:
+    sections:
+      required: false
+      default:
+        - devices
+        - entities
+        - entity_attributes
+        - services
+        - possible_values
+      selector:
+        select:
+          multiple: true
+          mode: list
+          options:
+            - value: devices
+              label: Devices
+            - value: entities
+              label: Entities
+            - value: entity_attributes
+              label: Entity Attributes
+            - value: services
+              label: Services
+            - value: actions
+              label: Actions
+            - value: possible_values
+              label: Possible Entity Values
+
+    entity_id:
+      required: false
+      selector:
+        entity:
+          multiple: true
+
+    device_ids:
+      required: false
+      selector:
+        device:
+          multiple: true
+
+    area_ids:
+      required: false
+      selector:
+        area:
+          multiple: true
+
+    label_ids:
+      required: false
+      selector:
+        label:
+          multiple: true
+
+    domains:
+      required: false
+      example: "light,climate,switch"
+      selector:
+        text:
+
+    include_disabled_entities:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+    create_notification:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+    output_format:
+      required: false
+      default: yaml
+      selector:
+        select:
+          options:
+            - value: yaml
+              label: YAML
+            - value: json
+              label: JSON
+
+    max_entities:
+      required: false
+      default: 500
+      selector:
+        number:
+          min: 1
+          max: 5000
+          step: 1
+          mode: box
+
+    max_services:
+      required: false
+      default: 500
+      selector:
+        number:
+          min: 1
+          max: 5000
+          step: 1
+          mode: box

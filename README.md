@@ -1,46 +1,87 @@
-# Notice
+# HACS AI Export
 
-The component and platforms in this repository are not meant to be used by a
-user, but as a "blueprint" that custom component developers can build
-upon, to make more awesome stuff.
+`hacs_ai_export` is a Home Assistant custom integration for exporting your HA setup
+into AI-friendly context text.
 
-HAVE FUN! 😎
+It is designed for users who want to build automations with AI tools without
+manually typing device/entity/service details.
 
-## Why?
+## What it exports
 
-This is simple, by having custom_components look (README + structure) the same
-it is easier for developers to help each other and for users to start using them.
+You can select one or more sections per export:
 
-If you are a developer and you want to add things to this "blueprint" that you think more
-developers will have use for, please open a PR to add it :)
+- Devices
+- Entities
+- Entity attributes
+- Services
+- Actions (service-call style actions)
+- Possible entity values/states (when discoverable from attributes)
 
-## What?
+The export includes filtering options for entities, devices, areas, and domains.
 
-This repository contains multiple files, here is a overview:
+## Installation
 
-File | Purpose | Documentation
--- | -- | --
-`.devcontainer.json` | Used for development/testing with Visual Studio Code. | [Documentation](https://code.visualstudio.com/docs/remote/containers)
-`.github/ISSUE_TEMPLATE/*.yml` | Templates for the issue tracker | [Documentation](https://help.github.com/en/github/building-a-strong-community/configuring-issue-templates-for-your-repository)
-`custom_components/integration_blueprint/*` | Integration files, this is where everything happens. | [Documentation](https://developers.home-assistant.io/docs/creating_component_index)
-`CONTRIBUTING.md` | Guidelines on how to contribute. | [Documentation](https://help.github.com/en/github/building-a-strong-community/setting-guidelines-for-repository-contributors)
-`LICENSE` | The license file for the project. | [Documentation](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/licensing-a-repository)
-`README.md` | The file you are reading now, should contain info about the integration, installation and configuration instructions. | [Documentation](https://help.github.com/en/github/writing-on-github/basic-writing-and-formatting-syntax)
-`requirements.txt` | Python packages used for development/lint/testing this integration. | [Documentation](https://pip.pypa.io/en/stable/user_guide/#requirements-files)
+### HACS (Custom Repository)
 
-## How?
+1. Open HACS in Home Assistant.
+2. Add this repository as a custom repository.
+3. Install **HACS AI Export**.
+4. Restart Home Assistant.
+5. Add the integration from **Settings -> Devices & Services -> Add Integration**.
 
-1. Create a new repository in GitHub, using this repository as a template by clicking the "Use this template" button in the GitHub UI.
-1. Open your new repository in Visual Studio Code devcontainer (Preferably with the "`Dev Containers: Clone Repository in Named Container Volume...`" option).
-1. Rename all instances of the `integration_blueprint` to `custom_components/<your_integration_domain>` (e.g. `custom_components/awesome_integration`).
-1. Rename all instances of the `Integration Blueprint` to `<Your Integration Name>` (e.g. `Awesome Integration`).
-1. Run the `scripts/develop` to start HA and test out your new integration.
+### Manual
 
-## Next steps
+Copy `custom_components/hacs_ai_export` into your HA config directory under
+`custom_components/`, then restart Home Assistant and add the integration.
 
-These are some next steps you may want to look into:
-- Add tests to your integration, [`pytest-homeassistant-custom-component`](https://github.com/MatthewFlamm/pytest-homeassistant-custom-component) can help you get started.
-- Add brand images (logo/icon).
-- Create your first release.
-- Share your integration on the [Home Assistant Forum](https://community.home-assistant.io/).
-- Submit your integration to [HACS](https://hacs.xyz/docs/publish/start).
+## Usage
+
+Use the service:
+
+- `hacs_ai_export.generate_context`
+
+From **Developer Tools -> Actions**, you get menu selectors for:
+
+- `sections` (multi-select)
+- `entity_id` (multi-select)
+- `device_ids` (multi-select)
+- `area_ids` (multi-select)
+- `label_ids` (multi-select)
+- `domains` (optional text filter)
+
+Optional controls:
+
+- Include disabled entities
+- Output format (`markdown` or `json`)
+- Safety limits (`max_entities`, `max_services`)
+- Persistent notification after generation
+
+The service response includes:
+
+- `text`: Copy-ready AI context
+- `payload`: Structured object
+- `summary`: Counts and section list
+
+## Example prompt flow
+
+1. Call `hacs_ai_export.generate_context`.
+2. Copy `text` from the service response.
+3. Paste into an AI chat with a request like:
+   "Create a Home Assistant automation YAML using only these entities/services."
+
+## Using Entity/Device/Area Views
+
+If you select rows in Home Assistant's Entity/Device/Area views, you can use labels
+to drive exports:
+
+1. Select rows in the view.
+2. Use **Add label** (like your screenshot flow).
+3. Call `hacs_ai_export.generate_context` with `label_ids` set to that label.
+4. Copy the returned `text`.
+
+The integration also injects an upper-right bulk action menu item in these views:
+
+- `Export selected for AI`
+
+This action exports currently selected rows and attempts to copy the AI context to
+your clipboard automatically.

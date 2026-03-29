@@ -4,5 +4,13 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-ruff format .
-ruff check . --fix
+VENV_PATH="${PWD}/.venv"
+RUFF_BIN="${VENV_PATH}/bin/ruff"
+
+if [[ ! -x "${RUFF_BIN}" ]]; then
+    echo "Virtualenv is missing. Run ./scripts/setup first."
+    exit 1
+fi
+
+"${RUFF_BIN}" format .
+"${RUFF_BIN}" check . --fix

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components import frontend, persistent_notification
+from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DOMAINS, CONF_ENTITY_ID
@@ -24,7 +24,6 @@ from .const import (
     DEFAULT_SECTIONS,
     DOMAIN,
     LOGGER,
-    NAME,
     SECTIONS_ALL,
     SERVICE_GENERATE_CONTEXT,
 )
@@ -143,23 +142,6 @@ def _async_register_services(hass: HomeAssistant) -> Callable[[], None]:
         )
 
         result = await async_generate_export(hass, request)
-
-        if call.data[CONF_CREATE_NOTIFICATION]:
-            sections = ", ".join(result.summary["sections"])
-            persistent_notification.async_create(
-                hass,
-                message=(
-                    "AI context export generated.\n\n"
-                    f"Sections: {sections}\n"
-                    f"Devices: {result.summary['device_count']}\n"
-                    f"Entities: {result.summary['entity_count']}\n"
-                    f"Services: {result.summary['service_count']}\n\n"
-                    "Call this service from Developer Tools and copy the `text` "
-                    "field from the response."
-                ),
-                title=NAME,
-                notification_id=f"{DOMAIN}_latest_export",
-            )
 
         return {
             "text": result.text,

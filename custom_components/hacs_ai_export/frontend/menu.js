@@ -8,6 +8,8 @@
   const ITEM_ATTR = "data-hacs-ai-export-item";
   const ITEM_SEPARATOR_ATTR = "data-hacs-ai-export-separator";
   const ITEM_LABEL = "Export selected for AI";
+  const MORE_INFO_ITEM_ATTR = "data-hacs-ai-export-more-info-item";
+  const MORE_INFO_ITEM_LABEL = "Export entity for AI";
   // mdi-content-copy
   const ITEM_ICON_PATH =
     "M19,21H8V7H19M19,3H8C6.89,3 6,3.89 6,5V7H5C3.89,7 3,7.89 3,9V21A2,2 0 0,0 5,23H16C17.11,23 18,22.11 18,21V19H19A2,2 0 0,0 21,17V5C21,3.89 20.11,3 19,3Z";
@@ -98,6 +100,8 @@
 
   const getHass = () => document.querySelector("home-assistant")?.hass;
 
+  const isEntityId = (value) => typeof value === "string" && ENTITY_ID_RE.test(value);
+
   const getViewType = () => {
     const path = window.location.pathname;
     if (path.includes("/config/entities")) return "entity";
@@ -113,6 +117,104 @@
       return ULID_RE.test(value) || HEX32_RE.test(value);
     }
     return false;
+  };
+
+  const getRootHost = (node) => {
+    const root = node?.getRootNode?.();
+    return root && root.host ? root.host : null;
+  };
+
+  const findInHostChain = (node, predicate) => {
+    let current = node;
+    while (current) {
+      if (predicate(current)) return current;
+      current = getRootHost(current);
+    }
+    return null;
+  };
+
+  const isInsideMoreInfoDialog = (node) =>
+    Boolean(
+      findInHostChain(
+        node,
+        (current) =>
+          current?.matches?.("ha-more-info-dialog")
+          || current?.tagName?.toLowerCase?.() === "ha-more-info-dialog",
+      ),
+    );
+
+  const maybeEntityIdFrom = (value) => {
+    if (isEntityId(value)) return value;
+    return null;
+  };
+
+  const extractEntityIdFromObject = (obj) => {
+    if (!obj || typeof obj !== "object") return null;
+
+    const directCandidates = [
+      obj.entityId,
+      obj.entity_id,
+      obj._entityId,
+      obj._entity_id,
+      obj.activeEntityId,
+      obj.activeEntity,
+      obj.moreInfoEntityId,
+      obj.moreInfoEntity,
+    ];
+    for (const candidate of directCandidates) {
+      const entityId = maybeEntityIdFrom(candidate);
+      if (entityId) return entityId;
+    }
+
+    const nestedCandidates = [
+      obj.stateObj?.entity_id,
+      obj._stateObj?.entity_id,
+      obj.stateObj?._entity_id,
+      obj._params?.entityId,
+      obj._params?.entity_id,
+      obj.params?.entityId,
+      obj.params?.entity_id,
+    ];
+    for (const candidate of nestedCandidates) {
+      const entityId = maybeEntityIdFrom(candidate);
+      if (entityId) return entityId;
+    }
+
+    return null;
+  };
+
+  const getMoreInfoEntityId = (sourceNode) => {
+    const fromHass = maybeEntityIdFrom(getHass()?.moreInfoEntityId);
+    if (fromHass) return fromHass;
+
+    const dialog =
+      findInHostChain(
+        sourceNode,
+        (node) =>
+          node?.matches?.("ha-more-info-dialog")
+          || node?.tagName?.toLowerCase?.() === "ha-more-info-dialog",
+      )
+      || queryAllDeep("ha-more-info-dialog").find((el) => !!extractEntityIdFromObject(el));
+
+    if (!dialog) return null;
+
+    const attrCandidates = [
+      dialog.getAttribute?.("entity-id"),
+      dialog.getAttribute?.("entity_id"),
+    ];
+    for (const candidate of attrCandidates) {
+      const entityId = maybeEntityIdFrom(candidate);
+      if (entityId) return entityId;
+    }
+
+    let current = dialog;
+    while (current) {
+      const candidate = extractEntityIdFromObject(current);
+      if (candidate) return candidate;
+      current = getRootHost(current);
+    }
+
+    return null;
   };
 
   const getConfigHostsForKind = (kind) => {
@@ -301,7 +403,7 @@
         "services",
         "possible_values",
       ],
-      create_notification: true,
+      create_notification: false,
       output_format: "yaml",
     };
     if (kind === "entity") serviceData.entity_id = ids;
@@ -488,6 +590,41 @@
     container.appendChild(item);
   };
 
+  const ensureMoreInfoMenuAction = (container) => {
+    if (!container || container.querySelector(`[${MORE_INFO_ITEM_ATTR}]`)) return;
+    if (!isInsideMoreInfoDialog(container)) return;
+
+    const item = createActionMenuItem(container);
+    item.setAttribute(MORE_INFO_ITEM_ATTR, "1");
+    item.removeAttribute(ITEM_ATTR);
+    const textContainer = item.querySelector("[slot='headline']");
+    if (textContainer) {
+      textContainer.textContent = MORE_INFO_ITEM_LABEL;
+    } else {
+      for (const node of Array.from(item.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          node.textContent = MORE_INFO_ITEM_LABEL;
+        }
+      }
+      if (!item.textContent?.toLowerCase()?.includes("export")) {
+        item.appendChild(document.createTextNode(MORE_INFO_ITEM_LABEL));
+      }
+    }
+
+    item.addEventListener("click", async (event) => {
+      event.preventDefault();
+      closeMenuForElement(item);
+      const entityId = getMoreInfoEntityId(container);
+      if (!entityId) {
+        notify("No entity detected in this dialog.");
+        return;
+      }
+      await callExportService("entity", [entityId]);
+    });
+
+    container.appendChild(item);
+  };
+
   const collectTargets = () => {
     const targets = new Set();
     const kind = getViewType();
@@ -533,12 +670,20 @@
     for (const container of collectTargets()) {
       ensureMenuAction(container);
     }
+    for (const container of queryAllDeep(
+      "ha-dropdown,[role='menu'],ha-md-menu,mwc-menu,mwc-list,.mdc-list,ha-button-menu",
+    )) {
+      if (!hasMenuItems(container)) continue;
+      ensureMoreInfoMenuAction(container);
+    }
   };
 
   const scheduleInject = () => {
     setTimeout(injectMenuItem, 0);
     setTimeout(injectMenuItem, 120);
     setTimeout(injectMenuItem, 320);
+    setTimeout(injectMenuItem, 700);
+    setTimeout(injectMenuItem, 1100);
   };
 
   const start = () => {

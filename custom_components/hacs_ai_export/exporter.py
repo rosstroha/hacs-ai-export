@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import Enum
 import json
 from typing import Any
 
@@ -470,6 +471,8 @@ def _json_safe_dict(input_data: Mapping[str, Any]) -> dict[str, Any]:
 
 def _json_safe_value(value: Any) -> Any:
     """Convert a value to a JSON-safe value."""
+    if isinstance(value, Enum):
+        return _json_safe_value(value.value)
     if isinstance(value, str):
         return str(value)
     if isinstance(value, (int, float, bool)) or value is None:

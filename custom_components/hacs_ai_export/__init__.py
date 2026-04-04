@@ -33,6 +33,7 @@ CONF_SECTIONS = "sections"
 CONF_DEVICE_IDS = "device_ids"
 CONF_AREA_IDS = "area_ids"
 CONF_LABEL_IDS = "label_ids"
+CONF_ENTITY_FIELDS = "entity_fields"
 CONF_CREATE_NOTIFICATION = "create_notification"
 CONF_OUTPUT_FORMAT = "output_format"
 CONF_INCLUDE_DISABLED_ENTITIES = "include_disabled_entities"
@@ -42,6 +43,16 @@ CONF_MAX_SERVICES = "max_services"
 OUTPUT_FORMAT_MARKDOWN = "markdown"
 OUTPUT_FORMAT_JSON = "json"
 OUTPUT_FORMAT_YAML = "yaml"
+ENTITY_FIELD_OPTIONS = (
+    "entity_id",
+    "name",
+    "domain",
+    "state",
+    "area",
+    "labels",
+    "attributes",
+    "possible_values",
+)
 FRONTEND_MENU_JS_PATH = f"/{DOMAIN}/menu.js"
 
 SERVICE_SCHEMA = vol.Schema(
@@ -54,6 +65,10 @@ SERVICE_SCHEMA = vol.Schema(
         vol.Optional(CONF_DEVICE_IDS): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(CONF_AREA_IDS): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(CONF_LABEL_IDS): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(CONF_ENTITY_FIELDS): vol.All(
+            cv.ensure_list,
+            [vol.In(ENTITY_FIELD_OPTIONS)],
+        ),
         vol.Optional(CONF_DOMAINS): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(CONF_INCLUDE_DISABLED_ENTITIES, default=False): cv.boolean,
         vol.Optional(CONF_CREATE_NOTIFICATION, default=True): cv.boolean,
@@ -134,6 +149,7 @@ def _async_register_services(hass: HomeAssistant) -> Callable[[], None]:
             device_ids=tuple(call.data.get(CONF_DEVICE_IDS, [])),
             area_ids=tuple(call.data.get(CONF_AREA_IDS, [])),
             label_ids=tuple(call.data.get(CONF_LABEL_IDS, [])),
+            entity_fields=tuple(call.data.get(CONF_ENTITY_FIELDS, [])),
             domains=normalized_domains,
             include_disabled_entities=bool(call.data[CONF_INCLUDE_DISABLED_ENTITIES]),
             output_format=str(call.data[CONF_OUTPUT_FORMAT]),

@@ -40,6 +40,16 @@ KNOWN_POSSIBLE_VALUE_ATTRS = (
     "available_modes",
 )
 
+ENTITY_FIELD_ENTITY_ID = "entity_id"
+ENTITY_FIELD_NAME = "name"
+ENTITY_FIELD_DOMAIN = "domain"
+ENTITY_FIELD_STATE = "state"
+ENTITY_FIELD_AREA = "area"
+ENTITY_FIELD_LABELS = "labels"
+ENTITY_FIELD_ATTRIBUTES = "attributes"
+ENTITY_FIELD_POSSIBLE_VALUES = "possible_values"
+ENTITY_FIELD_DEVICE_ID = "device_id"
+
 
 @dataclass(slots=True, frozen=True)
 class ExportRequest:
@@ -50,6 +60,7 @@ class ExportRequest:
     device_ids: tuple[str, ...]
     area_ids: tuple[str, ...]
     label_ids: tuple[str, ...]
+    entity_fields: tuple[str, ...]
     domains: tuple[str, ...]
     include_disabled_entities: bool
     output_format: str
@@ -79,6 +90,7 @@ async def async_generate_export(
     selected_entity_ids = set(request.entity_ids)
     selected_area_ids = set(request.area_ids)
     selected_label_ids = set(request.label_ids)
+    selected_entity_fields = {field for field in request.entity_fields if field}
     has_entity_scope_filter = bool(
         selected_entity_ids
         or selected_device_ids
@@ -127,6 +139,7 @@ async def async_generate_export(
             include_disabled_entities=request.include_disabled_entities,
             include_attributes=SECTION_ENTITY_ATTRIBUTES in sections,
             include_possible_values=SECTION_POSSIBLE_VALUES in sections,
+            selected_entity_fields=selected_entity_fields,
             max_entities=request.max_entities,
         )
 
@@ -161,6 +174,7 @@ async def async_generate_export(
             "device_ids": sorted(selected_device_ids),
             "area_ids": sorted(selected_area_ids),
             "label_ids": sorted(selected_label_ids),
+            "entity_fields": sorted(selected_entity_fields),
             "domains": sorted(normalized_domains),
             "include_disabled_entities": request.include_disabled_entities,
         },
@@ -234,12 +248,8 @@ def _collect_devices(
                 "area_id": device.area_id,
                 "area_name": area_name,
                 "labels": sorted(device.labels),
-                "identifiers": sorted(
-                    f"{key}:{value}" for key, value in device.identifiers
-                ),
-                "connections": sorted(
-                    f"{key}:{value}" for key, value in device.connections
-                ),
+                "identifiers": _format_registry_tuples(device.identifiers),
+                "connections": _format_registry_tuples(device.connections),
             }
         )
     return sorted(result, key=lambda item: (item.get("name") or "", item["device_id"]))
@@ -258,6 +268,7 @@ def _collect_entities(
     include_disabled_entities: bool,
     include_attributes: bool,
     include_possible_values: bool,
+    selected_entity_fields: set[str],
     max_entities: int,
 ) -> list[dict[str, Any]]:
     """Collect entity metadata and runtime state."""
@@ -312,6 +323,9 @@ def _collect_entities(
             possible_values = _extract_possible_values(state.attributes)
             if possible_values:
                 entry["possible_values"] = possible_values
+
+        if selected_entity_fields:
+            entry = _filter_entity_entry(entry, selected_entity_fields)
 
         result.append(entry)
         if len(result) >= max_entities:
@@ -458,6 +472,68 @@ def _extract_possible_values(attributes: Mapping[str, Any]) -> dict[str, Any]:
             "max": max_value,
             "step": step,
         }
+    return output
+
+
+def _format_registry_tuples(values: Any) -> list[str]:
+    """Render registry tuple-like values defensively."""
+    output: list[str] = []
+    if not isinstance(values, (set, list, tuple)):
+        return output
+
+    for item in values:
+        if isinstance(item, tuple):
+            if not item:
+                continue
+            if len(item) == 1:
+                output.append(str(item[0]))
+                continue
+            key = item[0]
+            if len(item) == 2:
+                output.append(f"{key}:{item[1]}")
+                continue
+            rest = "/".join(str(value) for value in item[1:])
+            output.append(f"{key}:{rest}")
+            continue
+        output.append(str(item))
+
+    return sorted(output)
+
+
+def _filter_entity_entry(
+    entry: Mapping[str, Any],
+    selected_entity_fields: set[str],
+) -> dict[str, Any]:
+    """Filter entity data to caller-selected aspects."""
+    output: dict[str, Any] = {}
+
+    if ENTITY_FIELD_ENTITY_ID in selected_entity_fields:
+        output["entity_id"] = entry.get("entity_id")
+    if ENTITY_FIELD_NAME in selected_entity_fields:
+        output["name"] = entry.get("name")
+    if ENTITY_FIELD_DOMAIN in selected_entity_fields:
+        output["domain"] = entry.get("domain")
+    if ENTITY_FIELD_STATE in selected_entity_fields:
+        output["state"] = entry.get("state")
+        output["state_is_reliable"] = entry.get("state_is_reliable")
+        output["unit_of_measurement"] = entry.get("unit_of_measurement")
+    if ENTITY_FIELD_AREA in selected_entity_fields:
+        output["area_id"] = entry.get("area_id")
+        output["area_name"] = entry.get("area_name")
+    if ENTITY_FIELD_LABELS in selected_entity_fields:
+        output["labels"] = entry.get("labels")
+    if ENTITY_FIELD_DEVICE_ID in selected_entity_fields:
+        output["device_id"] = entry.get("device_id")
+    if ENTITY_FIELD_ATTRIBUTES in selected_entity_fields and "attributes" in entry:
+        output["attributes"] = entry["attributes"]
+    if (
+        ENTITY_FIELD_POSSIBLE_VALUES in selected_entity_fields
+        and "possible_values" in entry
+    ):
+        output["possible_values"] = entry["possible_values"]
+
+    if not output:
+        output["entity_id"] = entry.get("entity_id")
     return output
 
 

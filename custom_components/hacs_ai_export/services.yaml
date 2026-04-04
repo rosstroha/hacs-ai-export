@@ -52,6 +52,30 @@ generate_context:
         label:
           multiple: true
 
+    entity_fields:
+      required: false
+      selector:
+        select:
+          multiple: true
+          mode: list
+          options:
+            - value: entity_id
+              label: Entity ID
+            - value: name
+              label: Name
+            - value: domain
+              label: Domain
+            - value: state
+              label: Current State
+            - value: area
+              label: Area
+            - value: labels
+              label: Labels
+            - value: attributes
+              label: Attributes
+            - value: possible_values
+              label: Possible States/Values
+
     domains:
       required: false
       example: "light,climate,switch"

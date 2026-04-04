@@ -10,6 +10,17 @@
   const ITEM_LABEL = "Export selected for AI";
   const MORE_INFO_ITEM_ATTR = "data-hacs-ai-export-more-info-item";
   const MORE_INFO_ITEM_LABEL = "Export entity for AI";
+  const ENTITY_FIELD_STORAGE_KEY = "hacs_ai_export_entity_fields_v1";
+  const ENTITY_FIELD_CHOICES = [
+    { key: "entity_id", label: "Entity ID", checked: true },
+    { key: "name", label: "Name", checked: true },
+    { key: "domain", label: "Domain", checked: true },
+    { key: "state", label: "Current State", checked: true },
+    { key: "area", label: "Area", checked: true },
+    { key: "labels", label: "Labels", checked: false },
+    { key: "attributes", label: "Attributes", checked: true },
+    { key: "possible_values", label: "Possible States/Values", checked: false },
+  ];
   // mdi-content-copy
   const ITEM_ICON_PATH =
     "M19,21H8V7H19M19,3H8C6.89,3 6,3.89 6,5V7H5C3.89,7 3,7.89 3,9V21A2,2 0 0,0 5,23H16C17.11,23 18,22.11 18,21V19H19A2,2 0 0,0 21,17V5C21,3.89 20.11,3 19,3Z";
@@ -217,6 +228,188 @@
     return null;
   };
 
+  const closeMoreInfoDialog = (sourceNode) => {
+    const dialog = findInHostChain(
+      sourceNode,
+      (node) =>
+        node?.matches?.("ha-more-info-dialog")
+        || node?.tagName?.toLowerCase?.() === "ha-more-info-dialog",
+    ) || queryAllDeep("ha-more-info-dialog")[0];
+
+    if (dialog) {
+      try {
+        if (typeof dialog.close === "function") {
+          dialog.close();
+        }
+      } catch (_err) {
+        // ignore
+      }
+      try {
+        if ("open" in dialog) dialog.open = false;
+      } catch (_err) {
+        // ignore
+      }
+      dialog.removeAttribute?.("open");
+    }
+
+    const haRoot = document.querySelector("home-assistant");
+    if (haRoot) {
+      haRoot.dispatchEvent(
+        new CustomEvent("hass-more-info", {
+          detail: { entityId: null },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+    }
+  };
+
+  const loadEntityFieldSelection = () => {
+    try {
+      const raw = window.localStorage.getItem(ENTITY_FIELD_STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return null;
+      const valid = parsed.filter((value) =>
+        ENTITY_FIELD_CHOICES.some((choice) => choice.key === value),
+      );
+      return valid.length ? valid : null;
+    } catch (_err) {
+      return null;
+    }
+  };
+
+  const saveEntityFieldSelection = (fields) => {
+    try {
+      window.localStorage.setItem(ENTITY_FIELD_STORAGE_KEY, JSON.stringify(fields));
+    } catch (_err) {
+      // ignore storage failures
+    }
+  };
+
+  const promptEntityFieldSelection = () => new Promise((resolve) => {
+    const stored = new Set(loadEntityFieldSelection() || []);
+    const backdrop = document.createElement("div");
+    backdrop.style.position = "fixed";
+    backdrop.style.inset = "0";
+    backdrop.style.background = "rgba(0, 0, 0, 0.45)";
+    backdrop.style.zIndex = "9999";
+    backdrop.style.display = "flex";
+    backdrop.style.alignItems = "center";
+    backdrop.style.justifyContent = "center";
+    backdrop.style.padding = "16px";
+
+    const panel = document.createElement("div");
+    panel.style.width = "min(460px, 100%)";
+    panel.style.maxHeight = "85vh";
+    panel.style.overflow = "auto";
+    panel.style.background = "var(--card-background-color, #1f1f1f)";
+    panel.style.color = "var(--primary-text-color, #fff)";
+    panel.style.borderRadius = "12px";
+    panel.style.padding = "16px";
+    panel.style.boxShadow = "0 12px 32px rgba(0, 0, 0, 0.35)";
+
+    const title = document.createElement("h3");
+    title.textContent = "Choose what to copy";
+    title.style.margin = "0 0 8px 0";
+    title.style.fontSize = "1.1rem";
+    panel.appendChild(title);
+
+    const subtitle = document.createElement("p");
+    subtitle.textContent = "These fields will be applied to all selected entities.";
+    subtitle.style.margin = "0 0 12px 0";
+    subtitle.style.opacity = "0.85";
+    subtitle.style.fontSize = "0.95rem";
+    panel.appendChild(subtitle);
+
+    const list = document.createElement("div");
+    list.style.display = "grid";
+    list.style.gap = "8px";
+
+    const checkboxes = [];
+    for (const choice of ENTITY_FIELD_CHOICES) {
+      const row = document.createElement("label");
+      row.style.display = "flex";
+      row.style.alignItems = "center";
+      row.style.gap = "10px";
+      row.style.cursor = "pointer";
+
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = choice.key;
+      input.checked = stored.size ? stored.has(choice.key) : choice.checked;
+
+      const text = document.createElement("span");
+      text.textContent = choice.label;
+
+      row.appendChild(input);
+      row.appendChild(text);
+      list.appendChild(row);
+      checkboxes.push(input);
+    }
+    panel.appendChild(list);
+
+    const error = document.createElement("div");
+    error.style.color = "var(--error-color, #db4437)";
+    error.style.minHeight = "1.2em";
+    error.style.fontSize = "0.9rem";
+    error.style.marginTop = "8px";
+    panel.appendChild(error);
+
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.justifyContent = "flex-end";
+    actions.style.gap = "8px";
+    actions.style.marginTop = "12px";
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.textContent = "Cancel";
+    cancel.style.padding = "8px 12px";
+
+    const confirm = document.createElement("button");
+    confirm.type = "button";
+    confirm.textContent = "Copy";
+    confirm.style.padding = "8px 12px";
+
+    actions.appendChild(cancel);
+    actions.appendChild(confirm);
+    panel.appendChild(actions);
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+
+    const cleanup = (value) => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      backdrop.remove();
+      resolve(value);
+    };
+
+    const collectSelected = () =>
+      checkboxes.filter((checkbox) => checkbox.checked).map((checkbox) => checkbox.value);
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cleanup(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+
+    cancel.addEventListener("click", () => cleanup(null));
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) cleanup(null);
+    });
+    confirm.addEventListener("click", () => {
+      const selected = collectSelected();
+      if (!selected.length) {
+        error.textContent = "Select at least one field.";
+        return;
+      }
+      saveEntityFieldSelection(selected);
+      cleanup(selected);
+    });
+  });
+
   const getConfigHostsForKind = (kind) => {
     if (kind === "entity") {
       return queryAllDeep("ha-config-entities,ha-config-entities-dashboard");
@@ -384,7 +577,7 @@
     return [...ids];
   };
 
-  const callExportService = async (kind, ids) => {
+  const callExportService = async (kind, ids, entityFields = null) => {
     const hass = getHass();
     if (!hass) {
       notify("Home Assistant context is not available.");
@@ -396,19 +589,30 @@
     }
 
     const serviceData = {
-      sections: [
+      create_notification: false,
+      output_format: "yaml",
+    };
+    if (kind === "entity") {
+      const selectedFields = Array.isArray(entityFields) && entityFields.length
+        ? entityFields
+        : ENTITY_FIELD_CHOICES.filter((choice) => choice.checked).map((choice) => choice.key);
+      const sections = ["entities"];
+      if (selectedFields.includes("attributes")) sections.push("entity_attributes");
+      if (selectedFields.includes("possible_values")) sections.push("possible_values");
+      serviceData.sections = sections;
+      serviceData.entity_id = ids;
+      serviceData.entity_fields = selectedFields;
+    } else {
+      serviceData.sections = [
         "devices",
         "entities",
         "entity_attributes",
         "services",
         "possible_values",
-      ],
-      create_notification: false,
-      output_format: "yaml",
-    };
-    if (kind === "entity") serviceData.entity_id = ids;
-    if (kind === "device") serviceData.device_ids = ids;
-    if (kind === "area") serviceData.area_ids = ids;
+      ];
+      if (kind === "device") serviceData.device_ids = ids;
+      if (kind === "area") serviceData.area_ids = ids;
+    }
 
     try {
       // Use websocket call_service with return_response when possible.
@@ -440,7 +644,7 @@
     } catch (_err) {
       // Fall back to classic service call without response body.
       await hass.callService(DOMAIN, SERVICE, serviceData);
-      notify("Started context export. Open Notifications to copy the result.");
+      notify("Export started, but response text was unavailable.");
     }
   };
 
@@ -565,6 +769,12 @@
       }
       closeMenuForElement(item);
       const ids = collectSelectedIds(kind);
+      if (kind === "entity") {
+        const selectedFields = await promptEntityFieldSelection();
+        if (!selectedFields) return;
+        await callExportService(kind, ids, selectedFields);
+        return;
+      }
       await callExportService(kind, ids);
     });
 
@@ -619,7 +829,13 @@
         notify("No entity detected in this dialog.");
         return;
       }
-      await callExportService("entity", [entityId]);
+      closeMoreInfoDialog(container);
+      await new Promise((resolve) => {
+        setTimeout(resolve, 80);
+      });
+      const selectedFields = await promptEntityFieldSelection();
+      if (!selectedFields) return;
+      await callExportService("entity", [entityId], selectedFields);
     });
 
     container.appendChild(item);

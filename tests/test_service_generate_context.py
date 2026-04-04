@@ -17,6 +17,7 @@ from custom_components.hacs_ai_export.const import (
     SERVICE_GENERATE_CONTEXT,
 )
 from custom_components.hacs_ai_export.exporter import ExportResult
+from custom_components.hacs_ai_export.exporter import _format_registry_tuples
 
 
 async def _create_entry(hass):
@@ -237,3 +238,63 @@ async def test_generate_context_filters_by_labels(hass):
     assert labeled_entity.entity_id in entity_ids
     assert unlabeled_entity.entity_id not in entity_ids
     assert device_entry.id in device_ids
+
+
+async def test_generate_context_filters_entity_fields(hass):
+    await _create_entry(hass)
+    entity_registry = er.async_get(hass)
+    entity_entry = entity_registry.async_get_or_create(
+        "light",
+        DOMAIN,
+        "field_filter_light",
+        suggested_object_id="field_filter_light",
+    )
+    hass.states.async_set(
+        entity_entry.entity_id,
+        "on",
+        {"brightness": 80, "options": ["on", "off"]},
+    )
+
+    response = await hass.services.async_call(
+        DOMAIN,
+        SERVICE_GENERATE_CONTEXT,
+        {
+            "sections": [
+                SECTION_ENTITIES,
+                SECTION_ENTITY_ATTRIBUTES,
+                SECTION_POSSIBLE_VALUES,
+            ],
+            "entity_id": [entity_entry.entity_id],
+            "entity_fields": ["entity_id", "state", "attributes"],
+            "output_format": "json",
+            "create_notification": False,
+        },
+        blocking=True,
+        return_response=True,
+    )
+
+    entity = response["payload"]["entities"][0]
+    assert set(entity.keys()) == {
+        "entity_id",
+        "state",
+        "state_is_reliable",
+        "unit_of_measurement",
+        "attributes",
+    }
+    assert entity["entity_id"] == entity_entry.entity_id
+    assert entity["state"] == "on"
+    assert entity["attributes"]["brightness"] == 80
+
+
+def test_format_registry_tuples_handles_variable_lengths():
+    assert _format_registry_tuples(
+        {
+            ("mac", "aa:bb:cc"),
+            ("identifier", "foo", "bar"),
+            ("single",),
+        }
+    ) == [
+        "identifier:foo/bar",
+        "mac:aa:bb:cc",
+        "single",
+    ]

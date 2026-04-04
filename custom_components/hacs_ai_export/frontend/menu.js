@@ -742,6 +742,19 @@
       .map((item) => (item.textContent || "").trim().toLowerCase())
       .filter(Boolean);
 
+  const isLikelyMoreInfoMenu = (container) => {
+    const texts = getMenuTexts(container);
+    if (!texts.length) return false;
+    const hasRelated = texts.some((text) => text.includes("related"));
+    const hasDetailsLike = texts.some(
+      (text) =>
+        text.includes("details")
+        || text.includes("device info")
+        || text.includes("service info"),
+    );
+    return hasRelated && hasDetailsLike;
+  };
+
   const isLikelyBulkActionMenu = (container) => {
     const texts = getMenuTexts(container);
     if (!texts.length) return false;
@@ -755,6 +768,15 @@
       "ha-dropdown,ha-button-menu,[role='menu'],ha-md-menu,mwc-menu,mwc-list,.mdc-list",
     )
     || element.parentElement;
+
+  const safeAppendMenuItem = (container, item) => {
+    try {
+      if (!container || !item) return;
+      if (!item.isConnected) container.appendChild(item);
+    } catch (_err) {
+      // ignore
+    }
+  };
 
   const ensureMenuAction = (container) => {
     if (!container || container.querySelector(`[${ITEM_ATTR}]`)) return;
@@ -784,25 +806,31 @@
         (menuItem.textContent || "").trim().toLowerCase().includes("delete selected"),
       );
 
-    if (deleteItem) {
-      const prev = deleteItem.previousElementSibling;
-      const prevIsDivider = prev?.tagName?.toLowerCase?.() === "wa-divider";
+    if (deleteItem && container.contains(deleteItem)) {
+      try {
+        const prev = deleteItem.previousElementSibling;
+        const prevIsDivider = prev?.tagName?.toLowerCase?.() === "wa-divider";
 
-      if (prevIsDivider) {
-        container.insertBefore(item, prev);
-      } else {
-        container.insertBefore(item, deleteItem);
-        container.insertBefore(createSeparator(), deleteItem);
+        if (prevIsDivider && container.contains(prev)) {
+          prev.before(item);
+        } else {
+          deleteItem.before(item);
+          deleteItem.before(createSeparator());
+        }
+        return;
+      } catch (_err) {
+        // Fallback to append when menu re-renders during insertion.
+        safeAppendMenuItem(container, item);
+        return;
       }
-      return;
     }
 
-    container.appendChild(item);
+    safeAppendMenuItem(container, item);
   };
 
   const ensureMoreInfoMenuAction = (container) => {
     if (!container || container.querySelector(`[${MORE_INFO_ITEM_ATTR}]`)) return;
-    if (!isInsideMoreInfoDialog(container)) return;
+    if (!isInsideMoreInfoDialog(container) && !isLikelyMoreInfoMenu(container)) return;
 
     const item = createActionMenuItem(container);
     item.setAttribute(MORE_INFO_ITEM_ATTR, "1");
@@ -838,7 +866,7 @@
       await callExportService("entity", [entityId], selectedFields);
     });
 
-    container.appendChild(item);
+    safeAppendMenuItem(container, item);
   };
 
   const collectTargets = () => {
@@ -884,13 +912,21 @@
 
   const injectMenuItem = () => {
     for (const container of collectTargets()) {
-      ensureMenuAction(container);
+      try {
+        ensureMenuAction(container);
+      } catch (_err) {
+        // Keep trying other menus when one container re-renders unexpectedly.
+      }
     }
     for (const container of queryAllDeep(
       "ha-dropdown,[role='menu'],ha-md-menu,mwc-menu,mwc-list,.mdc-list,ha-button-menu",
     )) {
       if (!hasMenuItems(container)) continue;
-      ensureMoreInfoMenuAction(container);
+      try {
+        ensureMoreInfoMenuAction(container);
+      } catch (_err) {
+        // Keep trying other menus when one container re-renders unexpectedly.
+      }
     }
   };
 
@@ -910,6 +946,9 @@
       scheduleInject();
     }, true);
     window.addEventListener("location-changed", () => {
+      scheduleInject();
+    });
+    window.addEventListener("hass-more-info", () => {
       scheduleInject();
     });
   };

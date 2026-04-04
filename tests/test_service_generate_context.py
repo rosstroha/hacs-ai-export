@@ -157,6 +157,13 @@ async def test_generate_context_filters_entities_and_includes_possible_values(ha
     )
     hass.states.async_set(second_entity_entry.entity_id, "off", {})
 
+    second_device = device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, "device-2")},
+        name="Unrelated Device",
+    )
+    device_registry.async_update_device(second_device.id)
+
     response = await hass.services.async_call(
         DOMAIN,
         SERVICE_GENERATE_CONTEXT,
@@ -181,9 +188,9 @@ async def test_generate_context_filters_entities_and_includes_possible_values(ha
     assert entities[0]["entity_id"] == entity_entry.entity_id
     assert entities[0]["possible_values"]["options"] == ["on", "off"]
     assert entities[0]["attributes"]["brightness"] == 150
-    assert any(
-        device["device_id"] == device_entry.id for device in payload["devices"]
-    )
+    device_ids = {device["device_id"] for device in payload["devices"]}
+    assert device_entry.id in device_ids
+    assert second_device.id not in device_ids
 
 
 async def test_generate_context_filters_by_labels(hass):

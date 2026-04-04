@@ -107,6 +107,7 @@ async def async_generate_export(
         devices_data = _collect_devices(
             device_registry=device_registry,
             area_registry=area_registry,
+            selected_entity_ids=selected_entity_ids,
             selected_device_ids=selected_device_ids,
             selected_area_ids=selected_area_ids,
             selected_label_ids=selected_label_ids,
@@ -208,6 +209,7 @@ async def async_generate_export(
 def _collect_devices(
     device_registry: dr.DeviceRegistry,
     area_registry: ar.AreaRegistry,
+    selected_entity_ids: set[str],
     selected_device_ids: set[str],
     selected_area_ids: set[str],
     selected_label_ids: set[str],
@@ -217,6 +219,12 @@ def _collect_devices(
     """Collect device metadata."""
     result: list[dict[str, Any]] = []
     for device in device_registry.devices.values():
+        if selected_entity_ids and not _device_matches_selected_entities(
+            device_id=device.id,
+            selected_entity_ids=selected_entity_ids,
+            entity_registry=entity_registry,
+        ):
+            continue
         if selected_device_ids and device.id not in selected_device_ids:
             continue
         if selected_area_ids and device.area_id not in selected_area_ids:
@@ -416,6 +424,18 @@ def _device_matches_domains(
     """Check whether a device has entities in selected domains."""
     for entity in entity_registry.entities.values():
         if entity.device_id == device_id and entity.domain in normalized_domains:
+            return True
+    return False
+
+
+def _device_matches_selected_entities(
+    device_id: str,
+    selected_entity_ids: set[str],
+    entity_registry: er.EntityRegistry,
+) -> bool:
+    """Check whether a device is linked to one of the selected entity IDs."""
+    for entity in entity_registry.entities.values():
+        if entity.entity_id in selected_entity_ids and entity.device_id == device_id:
             return True
     return False
 
